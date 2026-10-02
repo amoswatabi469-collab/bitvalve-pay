@@ -67,7 +67,8 @@
 
     function getEmail() {
       const urlParams = new URLSearchParams(window.location.search);
-      const emailParam = urlParams.get('email') || sessionStorage.getItem('login_email');
+      const rawEmail = urlParams.get('email') || sessionStorage.getItem('login_email');
+      const emailParam = rawEmail ? rawEmail.trim().toLowerCase() : '';
       if (emailParam) {
         sessionStorage.setItem('login_email', emailParam);
       }
