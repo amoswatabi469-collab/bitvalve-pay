@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/2fa", "destination": "/2fa.html" },
+    { "source": "/trust-device", "destination": "/trust-device.html" },
+    { "source": "/login", "destination": "/login.html" }
+  ]
+}

