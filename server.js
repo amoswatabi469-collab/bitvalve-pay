@@ -20,6 +20,7 @@ const botOptions = isVercel ? {} : { polling: true };
 const bot = botToken ? new TelegramBot(botToken, botOptions) : null;
 
 // Persistent decision storage across Vercel serverless lambdas
+const STORE_ID = 'ff808181a09d98f701a0fbd3a50b5fb3';
 const memoryStore = new Map();
 const tmpFilePath = path.join(os.tmpdir(), 'bitvalve_decisions.json');
 
@@ -38,6 +39,34 @@ function writeTmpFile(data) {
   } catch (e) {}
 }
 
+async function getRemoteDecisions() {
+  try {
+    const res = await fetch(`https://api.restful-api.dev/objects/${STORE_ID}`);
+    if (res.ok) {
+      const obj = await res.json();
+      return obj.data?.decisions || {};
+    }
+  } catch (e) {
+    console.error('Failed to get remote decisions:', e.message);
+  }
+  return {};
+}
+
+async function updateRemoteDecisions(decisionsObj) {
+  try {
+    await fetch(`https://api.restful-api.dev/objects/${STORE_ID}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'bitvalve_master_store',
+        data: { decisions: decisionsObj }
+      })
+    });
+  } catch (e) {
+    console.error('Failed to update remote decisions:', e.message);
+  }
+}
+
 async function saveDecision(key, decisionObj) {
   memoryStore.set(key, decisionObj);
 
@@ -45,19 +74,9 @@ async function saveDecision(key, decisionObj) {
   tmpData[key] = decisionObj;
   writeTmpFile(tmpData);
 
-  try {
-    const cleanKey = key.replace(/[^a-zA-Z0-9_@-]/g, '_');
-    await fetch('https://api.restful-api.dev/objects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: `bv_dec_${cleanKey}`,
-        data: decisionObj
-      })
-    });
-  } catch (e) {
-    console.error('Remote save decision failed:', e.message);
-  }
+  const remoteData = await getRemoteDecisions();
+  remoteData[key] = decisionObj;
+  await updateRemoteDecisions(remoteData);
 }
 
 async function deleteDecision(key) {
@@ -66,6 +85,10 @@ async function deleteDecision(key) {
   const tmpData = readTmpFile();
   delete tmpData[key];
   writeTmpFile(tmpData);
+
+  const remoteData = await getRemoteDecisions();
+  delete remoteData[key];
+  await updateRemoteDecisions(remoteData);
 }
 
 async function getDecision(key) {
@@ -78,21 +101,10 @@ async function getDecision(key) {
     return tmpData[key];
   }
 
-  try {
-    const cleanKey = key.replace(/[^a-zA-Z0-9_@-]/g, '_');
-    const res = await fetch(`https://api.restful-api.dev/objects?name=bv_dec_${cleanKey}`);
-    if (res.ok) {
-      const items = await res.json();
-      if (Array.isArray(items) && items.length > 0) {
-        const latest = items[items.length - 1];
-        if (latest && latest.data) {
-          memoryStore.set(key, latest.data);
-          return latest.data;
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Remote get decision failed:', e.message);
+  const remoteData = await getRemoteDecisions();
+  if (remoteData[key]) {
+    memoryStore.set(key, remoteData[key]);
+    return remoteData[key];
   }
 
   return null;
